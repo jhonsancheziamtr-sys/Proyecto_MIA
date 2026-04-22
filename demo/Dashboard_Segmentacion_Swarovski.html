@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard — Segmentación de Clientes Swarovski</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --navy:   #1F3864;
+    --azure:  #2E75B6;
+    --azureL: #4A90D9;
+    --ice:    #D6E4F0;
+    --iceL:   #EBF3FB;
+    --white:  #FFFFFF;
+    --gray:   #5D6D7E;
+    --grayLt: #F2F5F7;
+    --gold:   #BA7517;
+    --green:  #1E8449;
+    --red:    #C0392B;
+    --border: #D6E4F0;
+    --shadow: 0 2px 8px rgba(30,56,100,.10);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: var(--grayLt); color: #222; font-size: 14px; }
+
+  /* ── HEADER ── */
+  header { background: var(--navy); color: #fff; padding: 0 2rem; display: flex; align-items: center; justify-content: space-between; height: 56px; }
+  header h1 { font-size: 17px; font-weight: 600; }
+  .badge { background: var(--azure); color: #fff; font-size: 11px; padding: 2px 10px; border-radius: 12px; margin-left: 8px; }
+  #header-info { font-size: 11px; color: var(--ice); }
+
+  /* ── UPLOAD BAR ── */
+  .upload-bar {
+    background: var(--white);
+    border-bottom: 1px solid var(--border);
+    padding: .7rem 2rem;
+    display: flex;
+    align-items: center;
+    gap: 1.2rem;
+    flex-wrap: wrap;
+  }
+  .upload-zone {
+    display: flex;
+    align-items: center;
+    gap: .8rem;
+    background: var(--iceL);
+    border: 2px dashed var(--azure);
+    border-radius: 8px;
+    padding: .5rem 1.2rem;
+    cursor: pointer;
+    transition: background .15s;
+  }
+  .upload-zone:hover { background: var(--ice); }
+  .upload-zone input { display: none; }
+  .upload-zone label {
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--azure);
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+  }
+  .upload-icon { font-size: 20px; }
+  .upload-hint { font-size: 11px; color: var(--gray); }
+  .sep { width: 1px; height: 28px; background: var(--border); }
+  #btn-demo {
+    background: var(--grayLt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 12px;
+    color: var(--gray);
+    cursor: pointer;
+    font-weight: 600;
+  }
+  #btn-demo:hover { background: var(--ice); color: var(--navy); }
+  #status { font-size: 12px; font-weight: 600; }
+  .status-ok   { color: var(--green); }
+  .status-warn { color: var(--gold); }
+  .status-err  { color: var(--red); }
+
+  /* ── FILTROS ── */
+  .filters-bar {
+    background: var(--white);
+    border-bottom: 1px solid var(--border);
+    padding: .5rem 2rem;
+    display: flex;
+    align-items: center;
+    gap: .8rem;
+    flex-wrap: wrap;
+  }
+  .filters-bar label { font-size: 11px; color: var(--gray); font-weight: 700; white-space: nowrap; }
+  .filters-bar select {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 12px;
+    color: var(--navy);
+    background: var(--iceL);
+    outline: none;
+    max-width: 180px;
+  }
+  .filters-bar select:focus { border-color: var(--azure); }
+  #btn-reset {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-size: 12px;
+    color: var(--gray);
+    cursor: pointer;
+  }
+  #btn-reset:hover { background: var(--iceL); }
+
+  /* ── MAIN ── */
+  .main { padding: 1.2rem 2rem; }
+  .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap: .8rem; margin-bottom: 1.2rem; }
+  .kpi { background: var(--white); border-radius: 10px; padding: .9rem 1rem; box-shadow: var(--shadow); border-top: 4px solid var(--azure); }
+  .kpi-val { font-size: 26px; font-weight: 700; color: var(--navy); line-height: 1.1; }
+  .kpi-lbl { font-size: 10px; color: var(--gray); margin-top: 3px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; }
+  .kpi-sub { font-size: 10px; color: var(--azureL); margin-top: 2px; }
+  .kpi.green { border-top-color: var(--green); } .kpi.green .kpi-val { color: var(--green); }
+  .kpi.red   { border-top-color: var(--red);   } .kpi.red   .kpi-val { color: var(--red);   }
+  .kpi.gold  { border-top-color: var(--gold);  } .kpi.gold  .kpi-val { color: var(--gold);  }
+
+  .charts-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: .8rem; margin-bottom: .8rem; }
+  .charts-2 { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; margin-bottom: .8rem; }
+  .card { background: var(--white); border-radius: 10px; padding: 1rem; box-shadow: var(--shadow); }
+  .card h3 { font-size: 12px; font-weight: 700; color: var(--navy); margin-bottom: .7rem; border-left: 3px solid var(--azure); padding-left: 7px; }
+  .ch { position: relative; height: 210px; }
+  .ch-lg { position: relative; height: 250px; }
+
+  /* ── TABLA ── */
+  .table-card { background: var(--white); border-radius: 10px; box-shadow: var(--shadow); overflow: hidden; }
+  .table-top { display: flex; justify-content: space-between; align-items: center; padding: .8rem 1rem; border-bottom: 1px solid var(--border); }
+  .table-top h3 { font-size: 12px; font-weight: 700; color: var(--navy); border-left: 3px solid var(--azure); padding-left: 7px; }
+  #search-box { border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font-size: 12px; width: 200px; outline: none; }
+  #search-box:focus { border-color: var(--azure); }
+  .table-wrap { overflow-x: auto; max-height: 360px; overflow-y: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  thead th { background: var(--navy); color: #fff; padding: 7px 9px; text-align: left; position: sticky; top: 0; z-index: 1; font-weight: 600; white-space: nowrap; cursor: pointer; user-select: none; }
+  thead th:hover { background: var(--azure); }
+  tbody tr:nth-child(even) { background: var(--iceL); }
+  tbody tr:hover { background: var(--ice); }
+  tbody td { padding: 5px 9px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .pill { display: inline-block; border-radius: 10px; padding: 1px 7px; font-size: 10.5px; font-weight: 700; }
+  .p-blue  { background:#DBEAFE; color:#1D4ED8; }
+  .p-green { background:#D1FAE5; color:#065F46; }
+  .p-gold  { background:#FEF3C7; color:#92400E; }
+  .p-red   { background:#FEE2E2; color:#991B1B; }
+  .p-navy  { background:#E0E7FF; color:#1E3A8A; }
+  .p-gray  { background:#F3F4F6; color:#374151; }
+  .table-foot { padding: .5rem 1rem; font-size: 11px; color: var(--gray); border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+  #btn-export { background: var(--green); color: #fff; border: none; border-radius: 5px; padding: 3px 10px; font-size: 11px; cursor: pointer; font-weight: 700; }
+
+  /* ── OVERLAY ── */
+  #overlay { position: fixed; inset: 0; background: rgba(31,56,100,.75); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; color: #fff; gap: .8rem; }
+  #overlay h2 { font-size: 18px; }
+  #overlay p  { font-size: 13px; color: var(--ice); }
+  .spinner { width: 36px; height: 36px; border: 4px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── EMPTY STATE ── */
+  #empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4rem 2rem; color: var(--gray); gap: 1rem; text-align: center; }
+  #empty-state .empty-icon { font-size: 48px; }
+  #empty-state h2 { color: var(--navy); font-size: 18px; }
+  #empty-state p  { font-size: 13px; max-width: 420px; line-height: 1.6; }
+
+  /* DROP ZONE DRAG ── */
+  body.dragover .upload-zone { background: var(--ice); border-color: var(--navy); }
+</style>
+</head>
+<body>
+
+<div id="overlay">
+  <div class="spinner"></div>
+  <h2>Cargando datos…</h2>
+  <p>Segmentación Inteligente de Clientes · Swarovski Ecuador</p>
+</div>
+
+<header>
+  <h1>💎 Dashboard — Segmentación de Clientes <span class="badge">v5.0</span></h1>
+  <span id="header-info">Proyecto Capstone MIA · UDLA 2026</span>
+</header>
+
+<!-- ── UPLOAD BAR ── -->
+<div class="upload-bar">
+  <div class="upload-zone" id="drop-zone">
+    <span class="upload-icon">📂</span>
+    <label for="file-input">
+      Subir Excel o CSV del BLOQUE 10
+      <input type="file" id="file-input" accept=".csv,.xlsx,.xls">
+    </label>
+    <span class="upload-hint">(.xlsx · .xls · .csv)</span>
+  </div>
+  <div class="sep"></div>
+  <button id="btn-demo">📊 Usar datos demo</button>
+  <div class="sep"></div>
+  <span id="status"></span>
+</div>
+
+<!-- ── FILTROS ── -->
+<div class="filters-bar" id="filters-bar" style="display:none">
+  <label>RFM:</label>
+  <select id="f-rfm"><option value="">Todos</option></select>
+  <label>Producto:</label>
+  <select id="f-prod"><option value="">Todos</option></select>
+  <label>Ciclo:</label>
+  <select id="f-vida"><option value="">Todos</option></select>
+  <label>Valor:</label>
+  <select id="f-valor"><option value="">Todos</option></select>
+  <label>Acción:</label>
+  <select id="f-accion"><option value="">Todas</option></select>
+  <button id="btn-reset">↺ Limpiar filtros</button>
+</div>
+
+<div class="main" id="main-content">
+  <div id="empty-state">
+    <div class="empty-icon">📊</div>
+    <h2>Sin datos cargados</h2>
+    <p>Sube el Excel generado por el <strong>BLOQUE 10</strong> del pipeline<br>
+       (<code>SEGMENTACION_MULTIVARIABLE_SWAROVSKI_FINAL.xlsx</code>)<br>
+       o haz clic en <strong>Usar datos demo</strong> para explorar con datos sintéticos.</p>
+    <p style="margin-top:.5rem;font-size:11px;color:#9CA3AF">
+      También puedes arrastrar el archivo directamente sobre la barra superior.</p>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════
+// GENERADOR PSEUDOALEATORIO CON SEMILLA FIJA
+// Siempre produce los mismos 3,000 clientes demo
+// ═══════════════════════════════════════════════════════════════════════
+function mkRNG(seed) {
+  let s = seed >>> 0;
+  return () => {
+    s = Math.imul(1664525, s) + 1013904223 >>> 0;
+    return s / 4294967296;
+  };
+}
+
+function generateDemoData() {
+  const rng = mkRNG(2025);
+  const N = 3000;
+
+  const rfmSegs  = ["Diamante VIP","Fieles en Riesgo","Ocasionales/Nuevos","Inactivos Largo Plazo"];
+  const rfmDist  = [0.017, 0.017, 0.084, 0.882];
+  const prodSegs = ["Fans de ARETES","Fans de COLLAR","Fans de PULSERA","Fans de ANILLO","Fans de BOLÍGRAFOS"];
+  const prodDist = [0.405, 0.251, 0.155, 0.124, 0.065];
+  const vidaSegs = ["Leales Larga Trayectoria","En Riesgo de Inactividad","Fugaces"];
+  const vidaDist = [0.050, 0.093, 0.857];
+  const valSegs  = ["Ballena VIP Financiero","Alto Valor","Valor Medio","Bajo Valor"];
+  const valDist  = [0.003, 0.074, 0.260, 0.663];
+
+  function pick(arr, dist) {
+    const r = rng(); let cum = 0;
+    for (let i = 0; i < dist.length; i++) { cum += dist[i]; if (r < cum) return arr[i]; }
+    return arr[arr.length - 1];
+  }
+  function ri(lo, hi) { return Math.floor(rng() * (hi - lo + 1)) + lo; }
+
+  const data = [];
+  for (let i = 0; i < N; i++) {
+    const rfm   = pick(rfmSegs,  rfmDist);
+    const prod  = pick(prodSegs, prodDist);
+    const vida  = pick(vidaSegs, vidaDist);
+    const valor = pick(valSegs,  valDist);
+    const rec   = rfm.includes("Diamante") ? ri(200,300) : rfm.includes("Fieles") ? ri(280,400) : rfm.includes("Ocasion") ? ri(350,500) : ri(400,700);
+    const frec  = rfm.includes("Diamante") ? ri(5,15)   : rfm.includes("Fieles") ? ri(3,8)    : rfm.includes("Ocasion") ? ri(2,5)    : 1;
+    const mon   = valor.includes("Ballena") ? ri(5000,15000) : valor.includes("Alto") ? ri(800,2000) : valor.includes("Medio") ? ri(200,600) : ri(50,200);
+    let accion;
+    if (valor.includes("Ballena") || rfm.includes("Diamante")) accion = "UPGRADE: Programa VIP";
+    else if (vida.includes("Fugac")) accion = "WIN-BACK: Cupón 15%";
+    else if (prod.includes("ARETES"))  accion = "CROSS-SELL: Complementario";
+    else if (rfm.includes("Riesgo") || vida.includes("Riesgo")) accion = "RETENCIÓN: Vendedor histórico";
+    else accion = "NUTRICIÓN: Newsletter";
+
+    data.push({
+      NOMBRE_CLIENTE: "CLI_" + String(i).padStart(5,"0"),
+      RECENCIA: rec, FRECUENCIA: frec, MONETARIO: mon,
+      PERFIL_CLIENTE: rfm, PERFIL_PRODUCTO: prod,
+      SEGMENTO_VIDA: vida, VENTA_TOTAL_REAL: mon,
+      TICKET_MAX: Math.floor(mon * (0.3 + rng() * 0.5)),
+      SEGMENTO_VALOR: valor, ACCION_SUGERIDA: accion,
+    });
+  }
+  return data;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// MAPEO DE COLUMNAS (tolerante a nombres distintos)
+// ═══════════════════════════════════════════════════════════════════════
+function mapRow(r) {
+  const g = (keys) => { for (const k of keys) { if (r[k] !== undefined && r[k] !== null && r[k] !== "") return r[k]; } return ""; };
+  const n = (keys) => { const v = g(keys); return isNaN(+v) ? 0 : +v; };
+  return {
+    NOMBRE_CLIENTE:  g(["NOMBRE_CLIENTE","nombre_cliente","CLIENTE","cliente","ID","id"]),
+    RECENCIA:        n(["RECENCIA","recencia"]),
+    FRECUENCIA:      n(["FRECUENCIA","frecuencia"]),
+    MONETARIO:       n(["MONETARIO","monetario"]),
+    PERFIL_CLIENTE:  g(["PERFIL_CLIENTE","perfil_cliente","SEGMENTO_RFM","segmento_rfm","RFM"]),
+    PERFIL_PRODUCTO: g(["PERFIL_PRODUCTO","perfil_producto","SEGMENTO_PRODUCTO","segmento_producto"]),
+    SEGMENTO_VIDA:   g(["SEGMENTO_VIDA","segmento_vida","CICLO_VIDA","ciclo_vida"]),
+    VENTA_TOTAL_REAL:n(["VENTA_TOTAL_REAL","venta_total_real","VENTA_TOTAL","VENTA","venta"]),
+    TICKET_MAX:      n(["TICKET_MAX","ticket_max"]),
+    SEGMENTO_VALOR:  g(["SEGMENTO_VALOR","segmento_valor","VALOR","valor"]),
+    ACCION_SUGERIDA: g(["ACCION_SUGERIDA","accion_sugerida","ACCION","accion"]),
+  };
+}
+
+function detectColumns(rows) {
+  if (!rows.length) return false;
+  const r = rows[0];
+  const keys = Object.keys(r).map(k => k.toUpperCase());
+  return keys.some(k => k.includes("PERFIL") || k.includes("SEGMENTO") || k.includes("ACCION"));
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// ESTADO GLOBAL
+// ═══════════════════════════════════════════════════════════════════════
+let allData = [], filteredData = [], charts = {};
+let sortCol = null, sortAsc = true, tableSearch = "", tablePage = 0;
+const PAGE = 50;
+
+const COLORS = {
+  rfm:    ["#1F3864","#2E75B6","#BA7517","#9DC3E6"],
+  prod:   ["#C0392B","#2E75B6","#BA7517","#1E8449","#8E44AD"],
+  vida:   ["#1E8449","#BA7517","#C0392B"],
+  valor:  ["#1F3864","#2E75B6","#BA7517","#1E8449"],
+  accion: ["#2E75B6","#1E8449","#BA7517","#1F3864","#C0392B","#8E44AD"],
+};
+
+const PILL_MAP = [
+  ["Diamante","p-blue"],["Ballena","p-navy"],["Fieles","p-gold"],
+  ["Leal","p-green"],["Alto","p-blue"],["Medio","p-gold"],
+  ["ARETES","p-red"],["COLLAR","p-blue"],["PULSERA","p-gold"],
+  ["ANILLO","p-navy"],["BOLÍG","p-navy"],["BOLIG","p-navy"],
+  ["Riesgo","p-gold"],["Fugac","p-gray"],["Ocas","p-gray"],
+  ["Inact","p-red"],["Bajo","p-gray"],
+  ["WIN","p-red"],["NUTRICIÓN","p-blue"],["CROSS","p-green"],
+  ["RETEN","p-gold"],["UPGRADE","p-navy"],["VIP","p-navy"],
+];
+function pill(v) {
+  if (!v) return "";
+  const s = String(v).toUpperCase();
+  for (const [k, cls] of PILL_MAP) { if (s.includes(k.toUpperCase())) return cls; }
+  return "p-gray";
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// CARGA DE DATOS
+// ═══════════════════════════════════════════════════════════════════════
+function loadData(rows, sourceName) {
+  // Detectar si tiene columnas de segmentos
+  if (!detectColumns(rows)) {
+    setStatus(`⚠ "${sourceName}" no contiene columnas de segmentación. Sube el Excel del BLOQUE 10.`, "warn");
+    document.getElementById("overlay").style.display = "none";
+    return;
+  }
+
+  allData = rows.map(mapRow).filter(r =>
+    r.PERFIL_CLIENTE || r.PERFIL_PRODUCTO || r.SEGMENTO_VIDA || r.SEGMENTO_VALOR
+  );
+
+  if (!allData.length) {
+    setStatus("❌ No se encontraron filas válidas con segmentos.", "err");
+    document.getElementById("overlay").style.display = "none";
+    return;
+  }
+
+  filteredData = [...allData];
+  populateFilters();
+  renderAll();
+  document.getElementById("filters-bar").style.display = "flex";
+  document.getElementById("overlay").style.display = "none";
+  document.getElementById("header-info").textContent =
+    `${allData.length.toLocaleString("es-EC")} clientes · ${sourceName} · MIA-UDLA 2026`;
+  setStatus(`✅ ${allData.length.toLocaleString("es-EC")} clientes cargados desde ${sourceName}`, "ok");
+}
+
+function setStatus(msg, type) {
+  const el = document.getElementById("status");
+  el.textContent = msg;
+  el.className = type === "ok" ? "status-ok" : type === "warn" ? "status-warn" : "status-err";
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// LEER ARCHIVOS
+// ═══════════════════════════════════════════════════════════════════════
+function readFile(file) {
+  document.getElementById("overlay").style.display = "flex";
+  const name = file.name;
+  const ext  = name.split(".").pop().toLowerCase();
+
+  if (ext === "csv") {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const result = Papa.parse(e.target.result, {
+        header: true, dynamicTyping: true, skipEmptyLines: true
+      });
+      loadData(result.data, name);
+    };
+    reader.readAsText(file, "utf-8");
+
+  } else if (ext === "xlsx" || ext === "xls") {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: "array" });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
+        loadData(rows, name);
+      } catch(err) {
+        setStatus("❌ No se pudo leer el Excel: " + err.message, "err");
+        document.getElementById("overlay").style.display = "none";
+      }
+    };
+    reader.readAsArrayBuffer(file);
+
+  } else {
+    setStatus("❌ Formato no soportado. Usa .xlsx, .xls o .csv", "err");
+    document.getElementById("overlay").style.display = "none";
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// FILTROS
+// ═══════════════════════════════════════════════════════════════════════
+function populateFilters() {
+  const uniq = col => [...new Set(allData.map(r => r[col]).filter(Boolean))].sort();
+  const ids  = ["f-rfm","f-prod","f-vida","f-valor","f-accion"];
+  const cols = ["PERFIL_CLIENTE","PERFIL_PRODUCTO","SEGMENTO_VIDA","SEGMENTO_VALOR","ACCION_SUGERIDA"];
+  ids.forEach((id, i) => {
+    const sel = document.getElementById(id);
+    const cur = sel.value;
+    sel.innerHTML = `<option value="">Todos</option>`;
+    uniq(cols[i]).forEach(v => {
+      const short = v.split(":")[0];
+      sel.innerHTML += `<option value="${v}"${v===cur?" selected":""}>${short}</option>`;
+    });
+  });
+}
+
+function applyFilters() {
+  const rfm   = document.getElementById("f-rfm").value;
+  const prod  = document.getElementById("f-prod").value;
+  const vida  = document.getElementById("f-vida").value;
+  const valor = document.getElementById("f-valor").value;
+  const accion= document.getElementById("f-accion").value;
+  filteredData = allData.filter(r =>
+    (!rfm   || r.PERFIL_CLIENTE  === rfm)  &&
+    (!prod  || r.PERFIL_PRODUCTO === prod) &&
+    (!vida  || r.SEGMENTO_VIDA   === vida) &&
+    (!valor || r.SEGMENTO_VALOR  === valor)&&
+    (!accion|| r.ACCION_SUGERIDA === accion)
+  );
+  tablePage = 0;
+  renderAll();
+}
+
+function resetFilters() {
+  ["f-rfm","f-prod","f-vida","f-valor","f-accion"].forEach(id => {
+    document.getElementById(id).value = "";
+  });
+  filteredData = [...allData];
+  tablePage = 0;
+  renderAll();
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// KPIs
+// ═══════════════════════════════════════════════════════════════════════
+function renderKPIs(data) {
+  const total   = data.length;
+  const fugaces = data.filter(r => r.SEGMENTO_VIDA.includes("Fugac")).length;
+  const leales  = data.filter(r => r.SEGMENTO_VIDA.includes("Leal")).length;
+  const ballenas= data.filter(r => r.SEGMENTO_VALOR.includes("Ballena")).length;
+  const avgMon  = total ? data.reduce((s,r)=>s+r.VENTA_TOTAL_REAL,0)/total : 0;
+  const pctFug  = total ? fugaces/total*100 : 0;
+  const pctLeal = total ? leales/total*100  : 0;
+  return `
+  <div class="kpi-row">
+    <div class="kpi">
+      <div class="kpi-val">${total.toLocaleString("es-EC")}</div>
+      <div class="kpi-lbl">Clientes filtrados</div>
+      <div class="kpi-sub">4 perfiles por cliente</div>
+    </div>
+    <div class="kpi red">
+      <div class="kpi-val">${pctFug.toFixed(1)}%</div>
+      <div class="kpi-lbl">Clientes fugaces</div>
+      <div class="kpi-sub">Vida activa ≤ 6 días</div>
+    </div>
+    <div class="kpi green">
+      <div class="kpi-val">${pctLeal.toFixed(1)}%</div>
+      <div class="kpi-lbl">Clientes leales</div>
+      <div class="kpi-sub">750+ días activos</div>
+    </div>
+    <div class="kpi gold">
+      <div class="kpi-val">${ballenas}</div>
+      <div class="kpi-lbl">Clientes Ballena VIP</div>
+      <div class="kpi-sub">Gasto máximo</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val">$${Math.round(avgMon).toLocaleString("es-EC")}</div>
+      <div class="kpi-lbl">Venta promedio</div>
+      <div class="kpi-sub">Por cliente filtrado</div>
+    </div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// GRÁFICOS
+// ═══════════════════════════════════════════════════════════════════════
+function countBy(data, key) {
+  const m = {};
+  data.forEach(r => { const v = r[key]||"Sin datos"; m[v]=(m[v]||0)+1; });
+  return Object.entries(m).sort((a,b)=>b[1]-a[1]);
+}
+
+function mkChart(id, type, labels, values, colors, extraOpts={}) {
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  if (charts[id]) charts[id].destroy();
+  const total = values.reduce((a,b)=>a+b,0);
+  charts[id] = new Chart(ctx, {
+    type,
+    data: {
+      labels,
+      datasets:[{
+        data: values,
+        backgroundColor: colors,
+        borderColor: type==="bar" ? colors : "#fff",
+        borderWidth: type==="bar" ? 0 : 2,
+        borderRadius: type==="bar" ? 4 : 0,
+        hoverOffset: 6,
+      }]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{ display:type!=="bar", position:"right", labels:{boxWidth:11,font:{size:10}} },
+        tooltip:{ callbacks:{ label: ctx =>
+          ` ${ctx.label}: ${ctx.parsed.toLocaleString()} (${(ctx.parsed/total*100).toFixed(1)}%)`
+        }}
+      },
+      scales: type==="bar" ? {
+        x:{ grid:{display:false}, ticks:{font:{size:10}} },
+        y:{ grid:{color:"#EEF2F7"}, ticks:{font:{size:10}} }
+      } : {},
+      ...extraOpts
+    }
+  });
+}
+
+function renderCharts(data) {
+  const rfmC   = countBy(data,"PERFIL_CLIENTE");
+  const prodC  = countBy(data,"PERFIL_PRODUCTO");
+  const vidaC  = countBy(data,"SEGMENTO_VIDA");
+  const valorC = countBy(data,"SEGMENTO_VALOR");
+  const accC   = countBy(data,"ACCION_SUGERIDA");
+
+  const shorten = s => s.replace(" Largo Plazo","").replace(" Larga Trayectoria","")
+                        .replace(" de Inactividad","").replace(" VIP Financiero","")
+                        .replace("Fans de ","").split(":")[0];
+
+  mkChart("c-rfm",   "doughnut", rfmC.map(x=>shorten(x[0])),   rfmC.map(x=>x[1]),   COLORS.rfm.slice(0,rfmC.length));
+  mkChart("c-prod",  "bar",      prodC.map(x=>shorten(x[0])),  prodC.map(x=>x[1]),  COLORS.prod.slice(0,prodC.length));
+  mkChart("c-vida",  "doughnut", vidaC.map(x=>shorten(x[0])),  vidaC.map(x=>x[1]),  COLORS.vida.slice(0,vidaC.length));
+  mkChart("c-valor", "doughnut", valorC.map(x=>shorten(x[0])), valorC.map(x=>x[1]), COLORS.valor.slice(0,valorC.length));
+  mkChart("c-accion","bar",      accC.map(x=>shorten(x[0])),   accC.map(x=>x[1]),   COLORS.accion.slice(0,accC.length));
+
+  // Histograma recencia
+  const buckets = [0,60,120,180,300,450,600,9999];
+  const blabels = ["0–60d","61–120d","121–180d","181–300d","301–450d","451–600d","600+d"];
+  const bcounts = new Array(7).fill(0);
+  data.forEach(r => {
+    for(let i=0;i<7;i++) { if(r.RECENCIA>=buckets[i]&&r.RECENCIA<buckets[i+1]){bcounts[i]++;break;} }
+  });
+  mkChart("c-rec","bar", blabels, bcounts,
+    bcounts.map((_,i)=>i<2?"#1E8449":i<4?"#BA7517":"#C0392B"));
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// TABLA
+// ═══════════════════════════════════════════════════════════════════════
+let tableData = [];
+
+function renderTable() {
+  const srch  = tableSearch.toLowerCase();
+  let rows = filteredData.filter(r =>
+    !srch ||
+    String(r.NOMBRE_CLIENTE).toLowerCase().includes(srch) ||
+    String(r.PERFIL_CLIENTE).toLowerCase().includes(srch) ||
+    String(r.ACCION_SUGERIDA).toLowerCase().includes(srch)
+  );
+  if (sortCol) {
+    rows = [...rows].sort((a,b) => {
+      const av=a[sortCol], bv=b[sortCol];
+      if(typeof av==="number") return sortAsc?av-bv:bv-av;
+      return sortAsc?String(av).localeCompare(String(bv)):String(bv).localeCompare(String(av));
+    });
+  }
+  tableData = rows;
+  const paged = rows.slice(tablePage*PAGE,(tablePage+1)*PAGE);
+  const total = rows.length;
+
+  const cols  = ["NOMBRE_CLIENTE","RECENCIA","FRECUENCIA","MONETARIO","PERFIL_CLIENTE","PERFIL_PRODUCTO","SEGMENTO_VIDA","SEGMENTO_VALOR","VENTA_TOTAL_REAL","ACCION_SUGERIDA"];
+  const hdrs  = ["Cliente","Rec.","Frec.","Monetario","Seg. RFM","Producto","Ciclo de Vida","Valor/Margen","Venta Total","Acción"];
+  const nums  = ["RECENCIA","FRECUENCIA","MONETARIO","VENTA_TOTAL_REAL"];
+  const pills = ["PERFIL_CLIENTE","PERFIL_PRODUCTO","SEGMENTO_VIDA","SEGMENTO_VALOR","ACCION_SUGERIDA"];
+  const arrow = c => sortCol===c?(sortAsc?"↑":"↓"):"";
+
+  const thead = cols.map((c,i)=>`<th onclick="sortTable('${c}')">${hdrs[i]} ${arrow(c)}</th>`).join("");
+  const tbody = paged.map(r => {
+    const cells = cols.map(c => {
+      const v = r[c];
+      if (pills.includes(c)) {
+        const short = String(v||"").replace(" Larga Trayectoria","").replace(" de Inactividad","")
+          .replace(" VIP Financiero","").replace(" Largo Plazo","").split(":")[0];
+        return `<td><span class="pill ${pill(String(v))}">${short}</span></td>`;
+      }
+      if (nums.includes(c)) {
+        const fmt = (c==="MONETARIO"||c==="VENTA_TOTAL_REAL")
+          ? "$"+Math.round(+v).toLocaleString("es-EC")
+          : (+v).toLocaleString("es-EC");
+        return `<td>${fmt}</td>`;
+      }
+      const s = String(v||"");
+      return `<td title="${s}">${s.length>16?s.slice(0,15)+"…":s}</td>`;
+    }).join("");
+    return `<tr>${cells}</tr>`;
+  }).join("");
+
+  const start = tablePage*PAGE+1, end=Math.min((tablePage+1)*PAGE,total);
+  const prev  = tablePage>0  ? `<button onclick="changePage(-1)" style="border:none;background:var(--azure);color:#fff;border-radius:4px;padding:2px 9px;cursor:pointer;font-size:11px">◀</button>` : "";
+  const next  = end<total    ? `<button onclick="changePage(1)"  style="border:none;background:var(--azure);color:#fff;border-radius:4px;padding:2px 9px;cursor:pointer;font-size:11px">▶</button>` : "";
+
+  document.getElementById("t-head").innerHTML = `<tr>${thead}</tr>`;
+  document.getElementById("t-body").innerHTML = tbody;
+  document.getElementById("t-foot").innerHTML =
+    `<span>Mostrando ${start}–${end} de ${total.toLocaleString("es-EC")} clientes</span>
+     <span style="display:flex;gap:6px;align-items:center">${prev}${next}<button id="btn-export" onclick="exportCSV()">⬇ Exportar CSV</button></span>`;
+}
+
+window.sortTable = c => { sortAsc = sortCol===c?!sortAsc:true; sortCol=c; tablePage=0; renderTable(); };
+window.changePage = d => { tablePage+=d; renderTable(); };
+
+function exportCSV() {
+  const cols = ["NOMBRE_CLIENTE","RECENCIA","FRECUENCIA","MONETARIO","PERFIL_CLIENTE","PERFIL_PRODUCTO","SEGMENTO_VIDA","SEGMENTO_VALOR","VENTA_TOTAL_REAL","ACCION_SUGERIDA"];
+  const csv  = [cols.join(","), ...tableData.map(r=>cols.map(c=>`"${r[c]||""}"`).join(","))].join("\n");
+  const a = document.createElement("a");
+  a.href = "data:text/csv;charset=utf-8," + encodeURIComponent(csv);
+  a.download = "segmentacion_filtrada.csv";
+  a.click();
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// RENDER ALL
+// ═══════════════════════════════════════════════════════════════════════
+function renderAll() {
+  document.getElementById("main-content").innerHTML = `
+    ${renderKPIs(filteredData)}
+    <div class="charts-3">
+      <div class="card"><h3>Segmentos RFM</h3><div class="ch"><canvas id="c-rfm" role="img" aria-label="Segmentos RFM"></canvas></div></div>
+      <div class="card"><h3>Afinidad de producto</h3><div class="ch"><canvas id="c-prod" role="img" aria-label="Producto"></canvas></div></div>
+      <div class="card"><h3>Ciclo de vida</h3><div class="ch"><canvas id="c-vida" role="img" aria-label="Ciclo de vida"></canvas></div></div>
+    </div>
+    <div class="charts-3">
+      <div class="card"><h3>Valor / Margen financiero</h3><div class="ch-lg"><canvas id="c-valor" role="img" aria-label="Valor"></canvas></div></div>
+      <div class="card"><h3>Motor de recomendación — acciones</h3><div class="ch-lg"><canvas id="c-accion" role="img" aria-label="Acciones"></canvas></div></div>
+      <div class="card"><h3>Recencia — días desde última compra</h3><div class="ch-lg"><canvas id="c-rec" role="img" aria-label="Recencia"></canvas></div></div>
+    </div>
+    <div class="table-card" style="margin-bottom:1.5rem">
+      <div class="table-top">
+        <h3>Detalle de clientes</h3>
+        <input id="search-box" type="text" placeholder="Buscar cliente, segmento o acción…"
+               oninput="tableSearch=this.value;tablePage=0;renderTable()">
+      </div>
+      <div class="table-wrap"><table><thead id="t-head"></thead><tbody id="t-body"></tbody></table></div>
+      <div class="table-foot" id="t-foot"></div>
+    </div>`;
+
+  renderCharts(filteredData);
+  renderTable();
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// EVENTOS
+// ═══════════════════════════════════════════════════════════════════════
+document.getElementById("file-input").addEventListener("change", e => {
+  const file = e.target.files[0];
+  if (file) readFile(file);
+  e.target.value = "";
+});
+
+document.getElementById("btn-demo").addEventListener("click", () => {
+  document.getElementById("overlay").style.display = "flex";
+  setStatus("Cargando datos demo…","ok");
+  setTimeout(() => loadData(generateDemoData(), "Datos demo (3,000 clientes sintéticos)"), 200);
+});
+
+["f-rfm","f-prod","f-vida","f-valor","f-accion"].forEach(id =>
+  document.getElementById(id).addEventListener("change", applyFilters)
+);
+
+document.getElementById("btn-reset").addEventListener("click", resetFilters);
+
+// Drag & drop sobre la upload-bar
+const dropZone = document.getElementById("drop-zone");
+document.addEventListener("dragover", e => { e.preventDefault(); document.body.classList.add("dragover"); });
+document.addEventListener("dragleave", e => { if(!e.relatedTarget) document.body.classList.remove("dragover"); });
+document.addEventListener("drop", e => {
+  e.preventDefault();
+  document.body.classList.remove("dragover");
+  const file = e.dataTransfer.files[0];
+  if (file) readFile(file);
+});
+
+// Ocultar overlay al inicio
+window.addEventListener("load", () => {
+  document.getElementById("overlay").style.display = "none";
+});
+</script>
+</body>
+</html>
